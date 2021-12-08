@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# bin/compile <build-dir> <cache-dir>
+
+set -ex
+
+disp() {
+  echo "-----> $*"
+}
+
+BUILD_DIR=$1
+APT_DIR=$BUILD_DIR/.apt
+VENDOR_DIR="$BUILD_DIR/vendor"
+mkdir -p $VENDOR_DIR
+INSTALL_DIR="$VENDOR_DIR/mkvtoolnix"
+mkdir -p $INSTALL_DIR
+CACHE_DIR=$2
+
+# mkvtoolnix
+if [ -f $BUILD_DIR/MKVToolNixAppImage ] ; then
+    DOWNLOAD=$(grep http $BUILD_DIR/MKVToolNixAppImage | head -n 1)
+else
+    DOWNLOAD="https://mkvtoolnix.download/appimage/MKVToolNix_GUI-63.0.0-x86_64.AppImage"
+fi
+VERSION=$(echo $DOWNLOAD | grep -Poi "(?<=MKVToolNix_GUI-)[^/]+(?=\.AppImage)")
+VERSION=${VERSION:-default} # avoid empty version if the grep fails to match
+FILE_NAME=MKVToolNix_GUI-${VERSION}.AppImage
+
+mkdir -p $CACHE_DIR
+if ! [ -e $CACHE_DIR/$FILE_NAME ]; then  
+  disp "Downloading MKVToolNix_GUI AppImage"
+  curl -L $DOWNLOAD > $CACHE_DIR/$FILE_NAME
+
+  disp "Extracting MKVToolNix_GUI from AppImage archive"
+  cd $CACHE_DIR
+  chmod a+x $FILE_NAME
+  ./$FILE_NAME --appimage-extract
+  mv squashfs-root "mkvtoolnix-${VERSION}"
+else
+  echo "File already exists $CACHE_DIR/$FILE_NAME"
+fi
+
+cp -R $CACHE_DIR/mkvtoolnix-${VERSION}/usr $INSTALL_DIR
+
+PROFILE_PATH="$BUILD_DIR/.profile.d/mkvmerge.sh"
+mkdir -p $(dirname $PROFILE_PATH)
+echo 'export PATH="$PATH:${HOME}/vendor/mkvtoolnix/usr/bin"' >> $PROFILE_PATH
+PROFILE_PATH="$BUILD_DIR/.profile.d/mkvpropedit.sh"
+mkdir -p $(dirname $PROFILE_PATH)
+echo 'export PATH="$PATH:${HOME}/vendor/mkvtoolnix/usr/bin"' >> $PROFILE_PATH
+PROFILE_PATH="$BUILD_DIR/.profile.d/mkvextract.sh"
+mkdir -p $(dirname $PROFILE_PATH)
+echo 'export PATH="$PATH:${HOME}/vendor/mkvtoolnix/usr/bin"' >> $PROFILE_PATH
+PROFILE_PATH="$BUILD_DIR/.profile.d/mkvinfo.sh"
+echo 'export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$HOME/vendor/mkvtoolnix/usr/lib"' >> $PROFILE_PATH
+
+disp "MKVToolNix installed successfully."
+
